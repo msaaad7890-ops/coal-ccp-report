@@ -15,15 +15,20 @@
     in_flr      db 4, ?, 4 dup(' ')
     in_pls      db 4, ?, 4 dup(' ')
 
+    search_id   db 3, ?, 3 dup(' ')
+
     menu_msg    db 0dh, 0ah, "--- MENU ---"
                 db 0dh, 0ah, "1. Add Record"
                 db 0dh, 0ah, "2. View Records"
                 db 0dh, 0ah, "3. Show Totals"
                 db 0dh, 0ah, "4. Sort by ID"
-                db 0dh, 0ah, "5. Exit"
+                db 0dh, 0ah, "5. Update Record"
+                db 0dh, 0ah, "6. Delete Record"
+                db 0dh, 0ah, "7. Exit"
                 db 0dh, 0ah, "Select: $"
     
     p_sr        db 0dh, 0ah, "Sr# (2 digits): $"
+    p_ask_id    db 0dh, 0ah, "Enter Sr# to Find: $"
     p_name      db 0dh, 0ah, "Name (10 chars): $"
     p_fam       db 0dh, 0ah, "Family Count: $"
     p_wat       db 0dh, 0ah, "Water Liter: $"
@@ -31,6 +36,9 @@
     p_pls       db 0dh, 0ah, "Pulses Kg: $"
     
     msg_saved   db 0dh, 0ah, "Saved.$"
+    msg_upd     db 0dh, 0ah, "Record Updated.$"
+    msg_del     db 0dh, 0ah, "Record Deleted.$"
+    msg_nf      db 0dh, 0ah, "ID Not Found.$"
     msg_sorted  db 0dh, 0ah, "File Sorted by ID.$"
     msg_tot     db 0dh, 0ah, "Total Family: $"
     newline     db 0dh, 0ah, "$"
@@ -41,6 +49,7 @@
 main proc
     mov ax, @data
     mov ds, ax
+    mov es, ax
 
     mov ah, 3dh
     mov al, 0
@@ -75,6 +84,10 @@ menu_start:
     cmp al, '4'
     je  goto_sort
     cmp al, '5'
+    je  goto_update
+    cmp al, '6'
+    je  goto_delete
+    cmp al, '7'
     je  exit
     jmp menu_start
 
@@ -433,6 +446,270 @@ sort_save:
     mov ah, 09h
     int 21h
     
+    jmp menu_start
+
+goto_update:
+    lea dx, p_ask_id
+    mov ah, 09h
+    int 21h
+    lea dx, search_id
+    mov ah, 0ah
+    int 21h
+    
+    mov ah, 3dh
+    mov al, 0
+    lea dx, filename
+    int 21h
+    mov handle, ax
+
+    mov ah, 3fh
+    mov bx, handle
+    mov cx, 3200
+    lea dx, sort_buf
+    int 21h
+    
+    push ax 
+    mov bl, 32
+    div bl
+    mov ah, 0
+    mov num_recs, ax
+    
+    mov ah, 3eh
+    mov bx, handle
+    int 21h
+    
+    pop ax 
+    cmp ax, 0
+    je upd_not_found
+
+    mov cx, num_recs
+    mov si, 0
+    
+upd_search_loop:
+    mov al, sort_buf[si]
+    cmp al, search_id[2]
+    jne upd_next
+    mov al, sort_buf[si+1]
+    cmp al, search_id[3]
+    je  upd_found
+    
+upd_next:
+    add si, 32
+    loop upd_search_loop
+    jmp upd_not_found
+
+upd_found:
+    lea dx, p_name
+    mov ah, 09h
+    int 21h
+    lea dx, in_name
+    mov ah, 0ah
+    int 21h
+
+    lea dx, p_fam
+    mov ah, 09h
+    int 21h
+    lea dx, in_fam
+    mov ah, 0ah
+    int 21h
+    
+    lea dx, p_wat
+    mov ah, 09h
+    int 21h
+    lea dx, in_wat
+    mov ah, 0ah
+    int 21h
+    
+    lea dx, p_flr
+    mov ah, 09h
+    int 21h
+    lea dx, in_flr
+    mov ah, 0ah
+    int 21h
+    
+    lea dx, p_pls
+    mov ah, 09h
+    int 21h
+    lea dx, in_pls
+    mov ah, 0ah
+    int 21h
+
+    mov bx, 4
+upd_clear_mem:
+    mov sort_buf[si+bx], ' '
+    inc bx
+    cmp bx, 30
+    jne upd_clear_mem
+
+    mov cl, in_name[1]
+    cmp cl, 0
+    je u_skip_name
+    mov ch, 0
+    mov bx, 0
+u_copy_name:
+    mov al, in_name[bx+2]
+    mov sort_buf[si+bx+4], al
+    inc bx
+    loop u_copy_name
+u_skip_name:
+
+    mov cl, in_fam[1]
+    cmp cl, 0
+    je u_skip_fam
+    mov ch, 0
+    mov bx, 0
+u_copy_fam:
+    mov al, in_fam[bx+2]
+    mov sort_buf[si+bx+15], al
+    inc bx
+    loop u_copy_fam
+u_skip_fam:
+
+    mov cl, in_wat[1]
+    cmp cl, 0
+    je u_skip_wat
+    mov ch, 0
+    mov bx, 0
+u_copy_wat:
+    mov al, in_wat[bx+2]
+    mov sort_buf[si+bx+18], al
+    inc bx
+    loop u_copy_wat
+u_skip_wat:
+    
+    mov cl, in_flr[1]
+    cmp cl, 0
+    je u_skip_flr
+    mov ch, 0
+    mov bx, 0
+u_copy_flr:
+    mov al, in_flr[bx+2]
+    mov sort_buf[si+bx+22], al
+    inc bx
+    loop u_copy_flr
+u_skip_flr:
+    
+    mov cl, in_pls[1]
+    cmp cl, 0
+    je u_skip_pls
+    mov ch, 0
+    mov bx, 0
+u_copy_pls:
+    mov al, in_pls[bx+2]
+    mov sort_buf[si+bx+26], al
+    inc bx
+    loop u_copy_pls
+u_skip_pls:
+
+    jmp sort_save
+
+upd_not_found:
+    lea dx, msg_nf
+    mov ah, 09h
+    int 21h
+    jmp menu_start
+
+goto_delete:
+    lea dx, p_ask_id
+    mov ah, 09h
+    int 21h
+    lea dx, search_id
+    mov ah, 0ah
+    int 21h
+    
+    mov ah, 3dh
+    mov al, 0
+    lea dx, filename
+    int 21h
+    mov handle, ax
+
+    mov ah, 3fh
+    mov bx, handle
+    mov cx, 3200
+    lea dx, sort_buf
+    int 21h
+    
+    push ax
+    mov bl, 32
+    div bl
+    mov ah, 0
+    mov num_recs, ax
+    
+    mov ah, 3eh
+    mov bx, handle
+    int 21h
+    
+    pop ax
+    cmp ax, 0
+    je del_not_found
+
+    mov cx, num_recs
+    mov si, 0
+    
+del_search_loop:
+    mov al, sort_buf[si]
+    cmp al, search_id[2]
+    jne del_next
+    mov al, sort_buf[si+1]
+    cmp al, search_id[3]
+    je  del_found
+    
+del_next:
+    add si, 32
+    loop del_search_loop
+    jmp del_not_found
+
+del_found:
+    dec num_recs
+    
+    lea di, sort_buf
+    add di, si
+    lea si, sort_buf
+    add si, si
+    add si, 32
+    
+    mov cx, 3200
+    sub cx, si
+    cmp cx, 0
+    jle del_save
+    
+    cld
+    rep movsb
+    
+del_save:
+    mov ah, 3ch
+    mov cx, 0
+    lea dx, filename
+    int 21h
+    mov handle, ax
+    
+    mov ax, num_recs
+    mov bx, 32
+    mul bx
+    mov cx, ax
+    
+    cmp cx, 0
+    je del_done_write
+    
+    mov ah, 40h
+    mov bx, handle
+    lea dx, sort_buf
+    int 21h
+    
+del_done_write:
+    mov ah, 3eh
+    mov bx, handle
+    int 21h
+    
+    lea dx, msg_del
+    mov ah, 09h
+    int 21h
+    jmp menu_start
+
+del_not_found:
+    lea dx, msg_nf
+    mov ah, 09h
+    int 21h
     jmp menu_start
 
 exit:
